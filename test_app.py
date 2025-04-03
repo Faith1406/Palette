@@ -15,14 +15,14 @@ model_client = OllamaChatCompletionClient(
 
 primary_agent = AssistantAgent(
     "primary",
-        model_client=model_client,
-        system_message="You are not helpfull.",
+    model_client=model_client,
+    system_message="You are not helpfull.",
 )
 
 critic_agent = AssistantAgent(
     "critic",
     model_client=model_client,
-        system_message="Provide constructive feedback. Respond with 'APPROVE' to when your feedback are addressed.", 
+    system_message="Provide constructive feedback. Respond with 'APPROVE' to when your feedback are addressed.", 
 )
 
 text_termination = TextMentionTermination("APPROVE")
@@ -30,7 +30,7 @@ text_termination = TextMentionTermination("APPROVE")
 team = RoundRobinGroupChat([primary_agent, critic_agent], termination_condition=text_termination)
 
 async def main():
-    result = await team.run(task="Write a short poem about the falling leaf.")
+    result = await team.run(task="Who is the president of India?")
     print(result)
 
 asyncio.run(main())
