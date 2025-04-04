@@ -30,7 +30,6 @@ text_termination = TextMentionTermination("APPROVE")
 team = RoundRobinGroupChat([primary_agent, critic_agent], termination_condition=text_termination)
 
 async def main():
-    result = await team.run(task="Who is the president of India?")
-    print(result)
+    await Console(team.run_stream(task="Current IPL Leaderboard"))
 
 asyncio.run(main())
