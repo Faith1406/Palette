@@ -9,6 +9,7 @@ from autogen_core import CancellationToken
 
 class Team:
     def __init__(self, model_1, model_2):
+
         self.model_1 = model_1
         self.model_2 = model_2
         print(f"You created a team of {self.model_1} and {self.model_2}")
@@ -31,11 +32,14 @@ class Team:
         )
         self.text_termination = TextMentionTermination("APPROVE")
         self.team = RoundRobinGroupChat([self.primary_agent, self.critic_agent], termination_condition = self.text_termination)
-    
 
-if __name__ == "__main__":
+def main():    
     multi = Team("llama3", "llama3")
     text_input = input("Enter Your Question: ") 
     async def main(text_input):
         await Console(multi.team.run_stream(task=text_input))
     asyncio.run(main(text_input))
+
+
+if __name__ == "__main__":
+    main()
