@@ -10,7 +10,36 @@ from autogen_agentchat.ui import Console
 from autogen_core import CancellationToken
 
 class Team:
-    def __init__(self,provider_1, provider_2, model_1, model_2, system_message_1, system_message_2, description_1, description_2, termination_text="Approve", api_key_1=None, api_key_2=None, behaviour_1="primary", behaviour_2="critic",):
+    def __init__(self,provider_1=None, provider_2=None, model_1=None, model_2=None, system_message_1=None, system_message_2=None, description_1=None, description_2=None, termination_text="Approve", api_key_1=None, api_key_2=None, behaviour_1="primary", behaviour_2="critic",config=None):
+        if config:
+            provider_1 = provider_1 or config.get("provider_1")
+            provider_2 = provider_2 or config.get("provider_2")
+            model_1 = model_1 or config.get("model_1")
+            model_2 = model_2 or config.get("model_2")
+            api_key_1 = api_key_1 or config.get("api_key_1")
+            api_key_2 = api_key_2 or config.get("api_key_2")
+            behaviour_1 = behaviour_1 or config.get("behaviour_1", "primary")
+            behaviour_2 = behaviour_2 or config.get("behaviour_2", "critic")
+            description_1 = description_1 or config.get("description_1")
+            description_2 = description_2 or config.get("description_2")
+            system_message_1 = system_message_1 or config.get("system_message_1")
+            system_message_2 = system_message_2 or config.get("system_message_2")
+            termination_text = termination_text or config.get("termination_text", "Approve")
+
+        required_fields = {
+            "provider_1": provider_1,
+            "provider_2": provider_2,
+            "model_1": model_1,
+            "model_2": model_2,
+            "description_1": description_1,
+            "description_2": description_2,
+            "system_message_1": system_message_1,
+            "system_message_2": system_message_2,
+        }
+
+        missing = [k for k, v in required_fields.items() if not v]
+        if missing:
+            raise ValueError(f"Missing required config fields: {', '.join(missing)}")
 
         self.model_1 = model_1
         self.model_2 = model_2
@@ -59,5 +88,5 @@ class Team:
         asyncio.run(self.print_convo(text_input))
 
     def display_team_members(self):
-        print(f"You created the team of {self.model_1, self.model_2}")
+        print(f"You created the team of {self.model_1} and {self.model_2}")
 

@@ -1,0 +1,13 @@
+provider_1: openai
+provider_2: ollama
+model_1: gemini-1.5-flash-8b
+model_2: llama3
+system_message_1: You are a helpful assistant that can review travel plans...
+system_message_2: You are a helpful assistant that finalizes the travel plan...
+description_1: A helpful assistant that can plan trips.
+description_2: A helpful assistant that provides language tips.
+api_key_1: ${API_KEY}  
+behaviour_1: Planner
+behaviour_2: language_agent
+termination_text: TERMINATE
+
