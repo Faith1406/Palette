@@ -1,4 +1,6 @@
 import asyncio
+import os
+from dotenv import load_dotenv
 #this is the model factory 
 from model_factory import get_model_client as gt 
 #other team chats imports
@@ -52,6 +54,9 @@ class Team:
         self.team = RoundRobinGroupChat([self.primary_agent, self.critic_agent], termination_condition = self.text_termination)
 
 def main():    
+    load_dotenv()
+    print(os.getenv("API_KEY"))
+    api_key = os.getenv("API_KEY")
     multi = Team(
                 "openai", 
                 "ollama",  
@@ -61,7 +66,7 @@ def main():
                 system_message_2="You are a helpful assistant that can take in all of the suggestions and advice from the other agents and provide a detailed final travel plan. You must ensure that the final plan is integrated and complete. YOUR FINAL RESPONSE MUST BE THE COMPLETE PLAN. When the plan is complete and all perspectives are integrated, you can respond with TERMINATE.",
                 description_1="A helpful assistant that can plan trips.",
                 description_2="A helpful assistant that can provide language tips for a given destination.",
-                api_key_1="AIzaSyB2MNAiUGIfaTDVF9xCdKJ0wLh05hZ54VY", 
+                api_key_1=api_key, 
                 behaviour_1="Planner", 
                 behaviour_2="language_agent",
             )
