@@ -1,10 +1,10 @@
 import os
-from team import Team
+from neuronnet import NeuronNet 
 from dotenv import load_dotenv
 
 load_dotenv()
 
-team = Team(
+team = NeuronNet(
         "openai", 
         "ollama",  
         "gemini-1.5-flash-8b", 
@@ -19,8 +19,8 @@ team = Team(
     )
 def main():
     team.display_team_members() 
-    Question = input("Enter Your Question: ")
-    team.run_team(Question)
+    question = input("Enter Your Question: ")
+    team.run_team(question)
     
 if __name__ == "__main__":
     main()
