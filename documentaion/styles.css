@@ -1,5 +1,5 @@
 body{
-    font-family:'Franklin Gothic Medium', 'Arial Narrow', Arial, sans-serif;
+    font-family:'Times New Roman', serif
     border:3px solid black;
     padding-left:3px;
     margin:1px;
@@ -10,7 +10,6 @@ h1{
 }
 h2{
     color: brown;
-   
     text-decoration: underline;
 }
 p{
