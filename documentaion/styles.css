@@ -6,7 +6,7 @@ body{
     height:100%;
 }
 h1{
-    padding-left: 40%;
+    text-align: center;
 }
 h2{
     color: brown;
@@ -14,4 +14,9 @@ h2{
 }
 p{
     font-weight: 100;
+}
+.architecture img{
+height:800px;
+width: 50%;
+padding-left:380px;
 }
