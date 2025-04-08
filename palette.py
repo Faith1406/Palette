@@ -9,7 +9,7 @@ from autogen_agentchat.teams import RoundRobinGroupChat
 from autogen_agentchat.ui import Console
 from autogen_core import CancellationToken
 
-class NeuronNet:
+class Palette:
     def __init__(self,provider_1=None, provider_2=None, agent_1=None, agent_2=None, system_message_1=None, system_message_2=None, description_1=None, description_2=None, external_termination=None, termination_text="Approve", api_key_1=None, api_key_2=None, behaviour_1="primary", behaviour_2="critic",config=None):
         if config:
             provider_1 = provider_1 or config.get("provider_1")

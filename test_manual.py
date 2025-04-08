@@ -1,10 +1,10 @@
 import os
-from neuronnet import NeuronNet 
+from palette import Palette
 from dotenv import load_dotenv
 
 load_dotenv()
 
-team = NeuronNet(
+team = Palette(
         "openai", 
         "ollama",  
         "gemini-1.5-flash-8b", 
