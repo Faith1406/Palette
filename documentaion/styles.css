@@ -1,13 +1,34 @@
 body{
-    font-family:'Times New Roman', serif
-    border:3px solid black;
+    font-family:'Times New Roman';
     padding-left:3px;
     margin:1px;
     height:100%;
 }
-h1{
-    text-align: center;
+.introduction{
+    background-color: rgb(152, 181, 204);
+    padding:auto;
 }
+.install{
+    background-color: rgb(152, 181, 204);
+}
+.code{
+    background-color: rgb(152, 181, 204);
+}
+.performance{
+    background-color: rgb(152, 181, 204);
+}
+.architecture{
+    background-color: rgb(152, 181, 204);
+}
+.uses{
+    background-color: rgb(152, 181, 204);
+}
+
+.logo img{
+    display:flex;
+   padding-left: 500px;
+}
+
 h2{
     color: brown;
     text-decoration: underline;
@@ -15,8 +36,8 @@ h2{
 p{
     font-weight: 100;
 }
-.architecture img{
-height:800px;
-width: 50%;
-padding-left:380px;
+.flowchart img{
+height:100vh;
+
+padding-left:200px;
 }
