@@ -112,7 +112,7 @@ class Palette:
         self.text_termination = TextMentionTermination(self.termination_text)
         self.team = RoundRobinGroupChat(
             [self.primary_agent, self.secondary_agent],
-            termination_condition=self.external_termination | self.text_termination,
+            termination_condition=self.text_termination,
         )
 
     async def print_convo(self, text_input: str):
@@ -130,11 +130,11 @@ class Palette:
     def stopping_team(self):
         self.external_termination.set()
 
-    def token_used(self):
-        pass
-
     async def resume_team(self, new_text_input):
         await Console(self.team.run_stream(new_text_input))
 
     def planner(self, model_name_1, model_name_2, api_key_1, api_key_2):
         pass
+
+    def swap_team(self, max_token=10):
+        if 

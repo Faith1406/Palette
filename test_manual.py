@@ -11,15 +11,14 @@ team = Palette(
     "ollama",
     "gemini-1.5-flash-8b",
     "llama3",
-    system_message_1="You are a helpful assistant that can review travel plans, providing feedback on important/critical tips about how best to address language or communication challenges for the given destination. If the plan already includes language tips, you can mention that the plan is satisfactory, with rationale.",
-    system_message_2="You are a helpful assistant that can take in all of the suggestions and advice from the other agents and provide a detailed final travel plan. You must ensure that the final plan is integrated and complete. YOUR FINAL RESPONSE MUST BE THE COMPLETE PLAN. When the plan is complete and all perspectives are integrated, you can respond with TERMINATE.",
-    description_1="A helpful assistant that can plan trips.",
-    description_2="A helpful assistant that can provide language tips for a given destination.",
+    system_message_1="You are going to answer the coding problem in c++ that are from leetcode with no explanation.",
+    system_message_2="You area going to review the generated code if the answer is correct then answer as 'APPROVE'",
+    description_1="A helpfull assistant that will give the answer to the coding problem in c++, with no explanation",
+    description_2="A helpfull assistant that review the answer of the coding problem in c++.",
+    termination_text="APPROVE",
     api_key_1=os.getenv("API_KEY"),
-    behaviour_1="Planner",
-    behaviour_2="language_agent",
-    max_tokens_1=10,
-    max_tokens_2=10,
+    behaviour_1="Coding_Assistant",
+    behaviour_2="Code_Tester",
 )
 
 
@@ -31,5 +30,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-team = Palette()
