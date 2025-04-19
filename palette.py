@@ -182,24 +182,18 @@ class Palette:
 
     async def print_convo_and_count_tokens(self, text_input: str):
         full_output = ""
-        conversation_list = []  # List to store conversation entries
+        conversation_list = []
         retries = 0
 
         while retries < 3:
             async for message in self.team.run_stream(task=text_input):
                 if hasattr(message, "source") and hasattr(message, "content"):
-                    print(f"[{message.source}]: {message.content}")
-
-                    # Store in list as a dictionary
                     conversation_list.append(
                         {"source": message.source, "content": message.content}
                     )
 
-                    # Still build full_output for token counting
                     full_output += message.content + " "
                 else:
-                    print(message)
-                    # Optionally store system messages too
                     if isinstance(message, str):
                         conversation_list.append(
                             {"source": "system", "content": message}
@@ -207,14 +201,13 @@ class Palette:
 
             word_count = len(full_output.split())
             estimated_tokens = int(word_count * 1.3)
-            print(f"Estimated Total Tokens Used: {estimated_tokens}")
 
             if estimated_tokens >= self.token_threshold:
                 print("Token limit exceeded, expanding team...")
                 await self.create_new_team()
                 retries += 1
                 full_output = ""
-                conversation_list = []  # Reset the conversation list too
+                conversation_list = []
             else:
                 break
 
