@@ -182,15 +182,28 @@ class Palette:
 
     async def print_convo_and_count_tokens(self, text_input: str):
         full_output = ""
+        conversation_list = []  # List to store conversation entries
         retries = 0
 
         while retries < 3:
             async for message in self.team.run_stream(task=text_input):
                 if hasattr(message, "source") and hasattr(message, "content"):
                     print(f"[{message.source}]: {message.content}")
+
+                    # Store in list as a dictionary
+                    conversation_list.append(
+                        {"source": message.source, "content": message.content}
+                    )
+
+                    # Still build full_output for token counting
                     full_output += message.content + " "
                 else:
                     print(message)
+                    # Optionally store system messages too
+                    if isinstance(message, str):
+                        conversation_list.append(
+                            {"source": "system", "content": message}
+                        )
 
             word_count = len(full_output.split())
             estimated_tokens = int(word_count * 1.3)
@@ -201,11 +214,15 @@ class Palette:
                 await self.create_new_team()
                 retries += 1
                 full_output = ""
+                conversation_list = []  # Reset the conversation list too
             else:
                 break
 
+        return conversation_list
+
     def run_team(self, text_input: str):
-        asyncio.run(self.print_convo_and_count_tokens(text_input))
+        result = asyncio.run(self.print_convo_and_count_tokens(text_input))
+        return result
 
     def display_team_members(self):
         team_members = [self.agent_1, self.agent_2]

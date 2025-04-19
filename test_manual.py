@@ -31,13 +31,15 @@ team = Palette(
     behaviour_2="Code_Tester1",
     behaviour_3="Code_Tester2",
     behaviour_4="Code_Tester3",
+    token_threshold=150,
 )
 
 
 def main():
     team.display_team_members()
     question = input("Enter Your Question: ")
-    team.run_team(question)
+    result = team.run_team(question)
+    print(result)
 
 
 if __name__ == "__main__":
