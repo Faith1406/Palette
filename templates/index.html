@@ -6,12 +6,12 @@
 <body>
   <h1>Ask a Coding Question</h1>
   <form method="POST">
-    <input type="text" name="search" placeholder="e.g. Two Sum in C++" required>
-    <button type="submit">Ask</button>
+    <input type="text" name="search" placeholder="Type your question" required>
+    <button type="submit">Submit</button>
   </form>
 
   {% if answer %}
-    <h2>Output:</h2>
+    <h3>Output:</h3>
     <pre>{{ answer }}</pre>
   {% endif %}
 </body>
