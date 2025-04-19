@@ -201,6 +201,7 @@ class Palette:
 
             word_count = len(full_output.split())
             estimated_tokens = int(word_count * 1.3)
+            print(f"Estimated Total Tokens Used: {estimated_tokens}")
 
             if estimated_tokens >= self.token_threshold:
                 print("Token limit exceeded, expanding team...")

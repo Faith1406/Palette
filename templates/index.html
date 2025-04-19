@@ -1,19 +1,97 @@
 <!doctype html>
-<html>
-<head>
-  <title>Code Assistant</title>
-</head>
-<body>
-  <h1>Ask a Coding Question</h1>
-  <form method="POST">
-    <input type="text" name="search" placeholder="Type your question" required>
-    <button type="submit">Submit</button>
-  </form>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Palette Chat</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      .conversation {
+        border: 1px solid #ccc;
+        padding: 20px;
+        margin-bottom: 20px;
+        max-height: 500px;
+        overflow-y: auto;
+      }
+      .user {
+        background-color: #e6f7ff;
+        padding: 10px;
+        margin: 5px 0;
+        border-radius: 5px;
+      }
+      .system {
+        background-color: #f9f9f9;
+        padding: 10px;
+        margin: 5px 0;
+        border-radius: 5px;
+      }
+      form {
+        display: flex;
+        gap: 10px;
+      }
+      input[type="text"] {
+        flex-grow: 1;
+        padding: 10px;
+      }
+      button {
+        padding: 10px 20px;
+        background-color: #4caf50;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+      }
+      pre {
+        white-space: pre-wrap;
+        background-color: #f0f0f0;
+        padding: 10px;
+        border-radius: 5px;
+      }
+      code {
+        background-color: #f0f0f0;
+        padding: 2px 4px;
+        border-radius: 3px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Palette Chat</h1>
 
-  {% if answer %}
-    <h3>Output:</h3>
-    <pre>{{ answer }}</pre>
-  {% endif %}
-</body>
+    <div class="conversation" id="conversation">
+      {% for message in conversation %}
+      <div class="{{ message.source }}">
+        <strong>{{ message.source }}</strong>: {% if "```" in message.content %}
+        {% set parts = message.content.split('```') %} {{ parts[0] | safe }} {%
+        for i in range(1, parts|length, 2) %}
+        <pre><code>{{ parts[i] }}</code></pre>
+        {% if i+1 < parts|length %} {{ parts[i+1] | safe }} {% endif %} {%
+        endfor %} {% else %} {{ message.content | safe }} {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+
+    <form method="post" id="chatForm">
+      <input
+        type="text"
+        name="question"
+        id="question"
+        placeholder="Enter your question..."
+        required
+      />
+      <button type="submit">Send</button>
+    </form>
+
+    <script>
+      // Scroll to bottom of conversation on page load
+      document.addEventListener("DOMContentLoaded", function () {
+        const conversation = document.getElementById("conversation");
+        conversation.scrollTop = conversation.scrollHeight;
+      });
+    </script>
+  </body>
 </html>
-
