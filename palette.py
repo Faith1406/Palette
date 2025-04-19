@@ -40,7 +40,7 @@ class Palette:
         behaviour_2="critic",
         behaviour_3="advisor",
         behaviour_4="executor",
-        token_threshold=150,
+        token_threshold=10,
         config=None,
     ):
         if config:
@@ -226,7 +226,7 @@ class Palette:
 
     async def create_new_team(self):
         print("Resetting the team with existing agents...")
-        await self.team.reset()  # clears chat history if needed
+        await self.team.reset()
         self.team = RoundRobinGroupChat(
             self.agents, termination_condition=self.text_termination
         )
