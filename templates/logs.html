@@ -1,0 +1,31 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Surveillance Logs</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background-color: #1e1e2f;
+        color: #ddd;
+        padding: 20px;
+      }
+      .log-box {
+        background-color: #2e2e3f;
+        border-radius: 8px;
+        padding: 10px 15px;
+        margin-bottom: 10px;
+      }
+      .log-box code {
+        color: #9cdcfe;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Surveillance Logs</h1>
+    {% for log in logs %}
+    <div class="log-box"><code>{{ log }}</code></div>
+    {% else %}
+    <p>No logs available yet.</p>
+    {% endfor %}
+  </body>
+</html>

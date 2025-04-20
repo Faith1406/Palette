@@ -6,6 +6,8 @@ import sys
 from dotenv import load_dotenv
 from quart import Quart, make_response, redirect, render_template, request, url_for
 
+from palette import Palette
+
 load_dotenv()
 app = Quart(__name__)
 
@@ -167,6 +169,47 @@ async def chat():
     )
     response.set_cookie("conversation_id", conversation_id)
     return response
+
+
+@app.route("/logs")
+async def view_logs():
+    # You need access to the Palette instance used for the last run
+    # For now, let's just re-run it for example purposes (replace this logic with actual session-based retrieval)
+    test_question = "print hello world in c++"
+
+    try:
+        palette_instance = Palette(
+            "ollama",
+            "openai",
+            "openai",
+            "openai",
+            "llama3",
+            "gemini-1.5-flash-8b",
+            "gemini-1.5-flash-8b",
+            "gemini-1.5-flash-8b",
+            system_message_1="You are going to answer the coding problem in c++ that are from leetcode with no explanation.",
+            system_message_2="You are going to review the generated code if the answer is correct then answer as 'APPROVE'",
+            system_message_3="You are going to review the generated code if the answer is correct then answer as 'APPROVE'",
+            system_message_4="You are going to review the generated code if the answer is correct then answer as 'APPROVE'",
+            description_1="A helpful assistant that will give the answer to the coding problem in c++, with no explanation",
+            description_2="A helpful assistant that review the answer of the coding problem in c++.",
+            description_3="A helpful assistant that review the answer of the coding problem in c++.",
+            description_4="A helpful assistant that review the answer of the coding problem in c++.",
+            termination_text="APPROVE",
+            api_key_2=os.getenv("API_KEY"),
+            api_key_3=os.getenv("API_KEY"),
+            api_key_4=os.getenv("API_KEY"),
+            behaviour_1="Coding_Assistant",
+            behaviour_2="Code_Tester1",
+            behaviour_3="Code_Tester2",
+            behaviour_4="Code_Tester3",
+            token_threshold=150,
+        )
+        logs = palette_instance.get_surveillance_logs()
+    except Exception as e:
+        logs = [f"Error while getting logs: {str(e)}"]
+
+    return await render_template("logs.html", logs=logs)
 
 
 # Add API route for JSON responses

@@ -1,21 +1,32 @@
 import asyncio
+import os
 import threading
 import time
 from typing import Any, Dict, List, Optional
 
+import google.generativeai as genai
 import tiktoken
 from autogen_agentchat.agents import AssistantAgent
 from autogen_agentchat.conditions import ExternalTermination, TextMentionTermination
 from autogen_agentchat.teams import RoundRobinGroupChat
+from dotenv import load_dotenv
+from google.generativeai.types import HarmBlockThreshold, HarmCategory
 
 from model_factory import get_model_client
 
+load_dotenv()
+
 
 class SurveillanceAgent:
-    def __init__(self, palette):
+    def __init__(self, palette, gemini_api_key=os.getenv("API_KEY")):
         self.palette = palette
         self.monitoring_active = False
         self.background_thread = None
+
+        self.status_history = []
+        self.log_messages = []  # <-- Move this up here
+
+        # Error patterns and solutions
         self.error_patterns = {
             "token_limit": [
                 "token limit exceeded",
@@ -30,14 +41,229 @@ class SurveillanceAgent:
             ],
             "team_deadlock": ["agents not making progress", "circular conversation"],
         }
-        self.solutions = {
+
+        self.max_input_tokens = 4000
+        self.token_warning_threshold = 0.9
+
+        # Initialize Gemini
+        self.gemini_client = None
+        if gemini_api_key:
+            try:
+                genai.configure(api_key=gemini_api_key)
+                self.gemini_client = genai.GenerativeModel("gemini-pro")
+                self._log("Gemini AI agent initialized successfully")
+            except Exception as e:
+                self._log(f"Failed to initialize Gemini: {str(e)}")
+
+            # Error patterns and solutions
+            self.error_patterns = {
+                "token_limit": [
+                    "token limit exceeded",
+                    "context length",
+                    "too many tokens",
+                ],
+                "api_failure": [
+                    "API error",
+                    "rate limit",
+                    "connection error",
+                    "timeout",
+                ],
+                "model_error": [
+                    "content policy violation",
+                    "model error",
+                    "failed to generate",
+                ],
+                "team_deadlock": [
+                    "agents not making progress",
+                    "circular conversation",
+                ],
+            }
+
+            self.status_history = []
+            self.log_messages = []
+            self.max_input_tokens = 4000
+            self.token_warning_threshold = 0.9
+
+    async def get_ai_suggestion(self, context: str) -> str:
+        """Get AI-powered suggestion from Gemini."""
+        if not self.gemini_client:
+            return "No AI agent available for suggestions"
+
+        try:
+            response = await self.gemini_client.generate_content_async(
+                f"Analyze this system monitoring context and provide a concise solution:\n{context}",
+                safety_settings={
+                    HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+                    HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
+                    HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
+                    HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
+                },
+            )
+            return response.text
+        except Exception as e:
+            self._log(f"Gemini suggestion error: {str(e)}")
+            return f"Standard solution: {self._get_standard_solution(context)}"
+
+    def _get_standard_solution(self, error_type: str) -> str:
+        """Fallback standard solutions when Gemini isn't available."""
+        standard_solutions = {
             "token_limit": "Try reducing input size or using models with larger context windows.",
             "api_failure": "Check API keys, connection status, or try again later.",
             "model_error": "Consider changing the model or rephrasing your input.",
             "team_deadlock": "Try modifying agent system prompts or adding termination conditions.",
+            "input_too_long": "Please shorten your input or increase the token limit.",
         }
-        self.status_history = []
-        self.log_messages = []  # Store log messages instead of printing them
+        return standard_solutions.get(error_type, "No specific solution available")
+
+    async def check_input_tokens(self, text: str) -> Dict[str, Any]:
+        """Enhanced token check with AI suggestions."""
+        try:
+            encoding = tiktoken.get_encoding("cl100k_base")
+            tokens = encoding.encode(text)
+            token_count = len(tokens)
+
+            if token_count > self.max_input_tokens:
+                context = (
+                    f"Input exceeds token limit ({token_count}/{self.max_input_tokens})"
+                )
+                suggestion = await self.get_ai_suggestion("token_limit")
+
+                self._log(f"Token limit exceeded: {context}")
+                self._log(f"AI Suggestion: {suggestion}")
+
+                return {
+                    "status": "error",
+                    "type": "input_too_long",
+                    "token_count": token_count,
+                    "max_limit": self.max_input_tokens,
+                    "message": self._generate_token_limit_message(token_count),
+                    "suggestion": suggestion,
+                }
+
+            elif token_count > self.max_input_tokens * self.token_warning_threshold:
+                context = f"Input approaching token limit ({token_count}/{self.max_input_tokens})"
+                suggestion = await self.get_ai_suggestion("token_warning")
+
+                self._log(context)
+                self._log(f"AI Suggestion: {suggestion}")
+
+                return {
+                    "status": "warning",
+                    "type": "input_approaching_limit",
+                    "token_count": token_count,
+                    "max_limit": self.max_input_tokens,
+                    "message": f"Warning: {context}",
+                    "suggestion": suggestion,
+                }
+
+            return {
+                "status": "ok",
+                "token_count": token_count,
+                "max_limit": self.max_input_tokens,
+            }
+
+        except Exception as e:
+            error_msg = f"Token counting error: {str(e)}"
+            self._log(error_msg)
+            return {
+                "status": "error",
+                "type": "token_count_error",
+                "message": error_msg,
+            }
+
+    async def _check_team_health(self) -> Dict[str, Any]:
+        """Enhanced health check with AI analysis."""
+        # Check input tokens
+        if hasattr(self.palette, "text_input") and self.palette.text_input:
+            input_check = await self.check_input_tokens(self.palette.text_input)
+            if input_check["status"] != "ok":
+                return {
+                    "status": input_check["status"],
+                    "type": input_check["type"],
+                    "solution": input_check.get("suggestion"),
+                    "message": input_check["message"],
+                    "auto_recoverable": False,
+                }
+
+        # Check conversation activity
+        if not hasattr(self.palette.team, "messages") or not self.palette.team.messages:
+            return {"status": "ok", "message": "No active conversation to monitor"}
+
+        messages = self.palette.team.messages
+
+        # AI-powered deadlock detection
+        if len(messages) > 6 and await self._ai_detect_deadlock(messages):
+            context = "Agents appear stuck in circular conversation"
+            suggestion = await self.get_ai_suggestion("team_deadlock")
+
+            self._log(f"Deadlock detected: {context}")
+            self._log(f"AI Suggestion: {suggestion}")
+
+            return {
+                "status": "warning",
+                "type": "team_deadlock",
+                "solution": suggestion,
+                "auto_recoverable": True,
+            }
+
+        # AI-powered error detection
+        for msg in messages[-3:]:
+            if hasattr(msg, "content"):
+                error_type = self._detect_error(msg.content)
+                if error_type:
+                    context = (
+                        f"Detected {error_type} in message: {msg.content[:100]}..."
+                    )
+                    suggestion = await self.get_ai_suggestion(error_type)
+
+                    self._log(context)
+                    self._log(f"AI Suggestion: {suggestion}")
+
+                    return {
+                        "status": "error",
+                        "type": error_type,
+                        "solution": suggestion,
+                        "auto_recoverable": error_type in ["api_failure"],
+                    }
+
+        return {"status": "ok"}
+
+    async def _ai_detect_deadlock(self, messages: List) -> bool:
+        """Use AI to detect conversation deadlocks."""
+        if len(messages) < 6:
+            return False
+
+        conversation_snippet = "\n".join(
+            f"{msg.source}: {msg.content[:200]}"
+            for msg in messages[-6:]
+            if hasattr(msg, "content") and hasattr(msg, "source")
+        )
+
+        try:
+            prompt = f"""Analyze this conversation snippet and determine if the agents are stuck in a loop or deadlock:
+            {conversation_snippet}
+            
+            Respond only with 'yes' or 'no'."""
+
+            response = await self.gemini_client.generate_content_async(prompt)
+            return response.text.strip().lower() == "yes"
+        except Exception:
+            # Fallback to standard detection if AI fails
+            return self._detect_deadlock(messages)
+
+    def _generate_token_limit_message(self, token_count: int) -> str:
+        """Generate user-friendly message about token limits."""
+        over_by = token_count - self.max_input_tokens
+        reduction_pct = int((over_by / token_count) * 100) + 10  # Add buffer
+
+        return (
+            f"Your input exceeds the maximum token limit of {self.max_input_tokens}.\n"
+            f"Current token count: {token_count} (over by {over_by})\n"
+            f"Suggested actions:\n"
+            f"1. Shorten your input by about {reduction_pct}%\n"
+            f"2. Upgrade your plan to increase token limits\n"
+            f"3. Split your query into multiple smaller requests"
+        )
 
     def start_background_monitoring(self):
         """Start the surveillance agent in the background."""
@@ -103,6 +329,19 @@ class SurveillanceAgent:
 
     def _check_team_health(self) -> Dict[str, Any]:
         """Check the health status of the team."""
+        # First check input tokens if there's text input
+        if hasattr(self.palette, "text_input") and self.palette.text_input:
+            input_check = asyncio.run(self.check_input_tokens(self.palette.text_input))
+            if input_check["status"] != "ok":
+                return {
+                    "status": input_check["status"],
+                    "type": input_check["type"],
+                    "solution": input_check.get(
+                        "suggestion", self.solutions.get(input_check["type"], "")
+                    ),
+                    "message": input_check["message"],
+                    "auto_recoverable": False,
+                }
         # Check if a conversation is active
         if not hasattr(self.palette.team, "messages") or not self.palette.team.messages:
             return {"status": "ok", "message": "No active conversation to monitor"}
@@ -436,8 +675,21 @@ class Palette:
 
     def run_team(self, text: str):
         self.text_input = text
-        result = asyncio.run(self.print_convo_and_count_tokens(text))
-        return result
+
+        # Check input tokens before running
+        token_check = asyncio.run(self.surveillance.check_input_tokens(text))
+        if token_check["status"] == "error":
+            print(token_check["message"])
+            print("\nSuggested solutions:")
+            print(token_check["suggestion"])
+            return [], 0
+
+        try:
+            result = asyncio.run(self.print_convo_and_count_tokens(text))
+            return result
+        except Exception as e:
+            print(f"Error running team: {str(e)}")
+            return [], 0
 
     def stop_surveillance(self):
         """Stop the background surveillance."""
@@ -460,6 +712,11 @@ class Palette:
         print(f"You created a team of {len(team_members)} agents:")
         for i, agent in enumerate(team_members, 1):
             print(f"  {i}. {agent}")
+
+    def set_token_limit(self, max_tokens: int):
+        """Set the maximum allowed input tokens."""
+        self.surveillance.max_input_tokens = max_tokens
+        print(f"Input token limit set to {max_tokens}")
 
     async def resetting_team(self):
         await self.team.reset()
