@@ -94,6 +94,40 @@ async def run_palette_in_subprocess(question):
     return pickle.loads(stdout)
 
 
+def process_palette_result(result):
+    """Process the result returned from Palette.
+
+    Args:
+        result (tuple): A tuple containing (conversation_list, token_count)
+
+    Returns:
+        list: Formatted conversation messages for display
+    """
+    if not isinstance(result, tuple) or len(result) != 2:
+        return [{"source": "system", "content": f"Unexpected result format: {result}"}]
+
+    conversation_list, token_count = result
+
+    # If conversation_list is not a list, convert it to a string
+    if not isinstance(conversation_list, list):
+        return [{"source": "system", "content": str(conversation_list)}]
+
+    # Remove the first message if it's from the user (to avoid duplication)
+    if (
+        conversation_list
+        and len(conversation_list) > 0
+        and conversation_list[0].get("source") == "user"
+    ):
+        conversation_list = conversation_list[1:]
+
+    # Add token count as a system message
+    conversation_list.append(
+        {"source": "system", "content": f"Token count: {token_count}"}
+    )
+
+    return conversation_list
+
+
 @app.route("/", methods=["GET", "POST"])
 async def chat():
     conversation_id = request.cookies.get("conversation_id")
@@ -115,14 +149,10 @@ async def chat():
                 # Use the subprocess to run the Palette team
                 result = await run_palette_in_subprocess(question)
 
-                # Process the result
-                if isinstance(result, list):
-                    for response in result:
-                        conversations[conversation_id].append(response)
-                else:
-                    conversations[conversation_id].append(
-                        {"source": "system", "content": str(result)}
-                    )
+                # Process the result properly
+                processed_results = process_palette_result(result)
+                conversations[conversation_id].extend(processed_results)
+
             except Exception as e:
                 conversations[conversation_id].append(
                     {"source": "system", "content": f"Error: {str(e)}"}
@@ -156,13 +186,10 @@ async def api_chat():
         try:
             result = await run_palette_in_subprocess(question)
 
-            if isinstance(result, list):
-                for response in result:
-                    conversations[conversation_id].append(response)
-            else:
-                conversations[conversation_id].append(
-                    {"source": "system", "content": str(result)}
-                )
+            # Process the result properly
+            processed_results = process_palette_result(result)
+            conversations[conversation_id].extend(processed_results)
+
         except Exception as e:
             conversations[conversation_id].append(
                 {"source": "system", "content": f"Error: {str(e)}"}
@@ -176,6 +203,54 @@ async def api_chat():
     )
     response.set_cookie("conversation_id", conversation_id)
     return response
+
+
+# Add route to update HELPER_SCRIPT with auto team creation
+@app.route("/api/update_team", methods=["POST"])
+async def update_team():
+    json_data = await request.get_json()
+    prompt = json_data.get("prompt", "")
+
+    if not prompt:
+        return {"error": "No prompt provided"}, 400
+
+    # Create a new helper script with auto team creation
+    new_helper_script = """
+import asyncio
+import os
+import pickle
+import sys
+from dotenv import load_dotenv
+from palette import Palette
+
+load_dotenv()
+
+def main():
+    # Get input from stdin
+    input_data = sys.stdin.buffer.read()
+    question = pickle.loads(input_data)
+    
+    # Initialize Palette with auto team creation
+    team = Palette(default_model="gpt-4", default_provider="openai")
+    
+    # Auto-create a team based on the question
+    team.auto_create_team(question, api_key=os.getenv("API_KEY"))
+    
+    # Run the team and get the result
+    result = team.run_team(question)
+    
+    # Write result to stdout
+    sys.stdout.buffer.write(pickle.dumps(result))
+
+if __name__ == "__main__":
+    main()
+"""
+
+    # Write the new helper script
+    with open("palette_helper.py", "w") as f:
+        f.write(new_helper_script)
+
+    return {"success": True, "message": "Team updated with auto-creation capability"}
 
 
 if __name__ == "__main__":

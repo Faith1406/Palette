@@ -1,10 +1,211 @@
 import asyncio
+import threading
+import time
+from typing import Any, Dict, List, Optional
 
+import tiktoken
 from autogen_agentchat.agents import AssistantAgent
 from autogen_agentchat.conditions import ExternalTermination, TextMentionTermination
 from autogen_agentchat.teams import RoundRobinGroupChat
 
 from model_factory import get_model_client
+
+
+class SurveillanceAgent:
+    def __init__(self, palette):
+        self.palette = palette
+        self.monitoring_active = False
+        self.background_thread = None
+        self.error_patterns = {
+            "token_limit": [
+                "token limit exceeded",
+                "context length",
+                "too many tokens",
+            ],
+            "api_failure": ["API error", "rate limit", "connection error", "timeout"],
+            "model_error": [
+                "content policy violation",
+                "model error",
+                "failed to generate",
+            ],
+            "team_deadlock": ["agents not making progress", "circular conversation"],
+        }
+        self.solutions = {
+            "token_limit": "Try reducing input size or using models with larger context windows.",
+            "api_failure": "Check API keys, connection status, or try again later.",
+            "model_error": "Consider changing the model or rephrasing your input.",
+            "team_deadlock": "Try modifying agent system prompts or adding termination conditions.",
+        }
+        self.status_history = []
+
+    def start_background_monitoring(self):
+        """Start the surveillance agent in the background."""
+        if self.monitoring_active:
+            print("Surveillance monitoring is already active.")
+            return
+
+        self.monitoring_active = True
+        self.background_thread = threading.Thread(target=self._background_monitor_loop)
+        self.background_thread.daemon = (
+            True  # Allow the thread to exit when the main program exits
+        )
+        self.background_thread.start()
+        print("🔍 Surveillance Agent activated and monitoring in background.")
+
+    def stop_background_monitoring(self):
+        """Stop the background monitoring."""
+        if not self.monitoring_active:
+            return
+
+        self.monitoring_active = False
+        if self.background_thread:
+            self.background_thread.join(timeout=2.0)  # Wait for thread to finish
+            print("🛑 Surveillance Agent deactivated.")
+
+    def _background_monitor_loop(self):
+        """Main background monitoring loop."""
+        while self.monitoring_active:
+            try:
+                # Check team health
+                health_status = self._check_team_health()
+
+                if health_status["status"] != "ok":
+                    print(f"\n⚠️ SURVEILLANCE ALERT: {health_status['type']}")
+                    print(f"SUGGESTED SOLUTION: {health_status['solution']}")
+
+                    # Attempt auto-recovery if enabled
+                    if health_status.get("auto_recoverable", False):
+                        print("Attempting auto-recovery...")
+                        self._attempt_recovery(health_status["type"])
+
+                # Store health status history
+                self.status_history.append(
+                    {"timestamp": time.time(), "status": health_status}
+                )
+
+                # Keep history manageable
+                if len(self.status_history) > 100:
+                    self.status_history = self.status_history[-100:]
+
+                # Sleep before next check
+                time.sleep(5)  # Check every 5 seconds
+
+            except Exception as e:
+                print(f"Surveillance monitoring error: {str(e)}")
+                time.sleep(10)  # Back off on errors
+
+    def _check_team_health(self) -> Dict[str, Any]:
+        """Check the health status of the team."""
+        # Check if a conversation is active
+        if not hasattr(self.palette.team, "messages") or not self.palette.team.messages:
+            return {"status": "ok", "message": "No active conversation to monitor"}
+
+        messages = self.palette.team.messages
+
+        # Check for team deadlock
+        if len(messages) > 6:
+            if self._detect_deadlock(messages):
+                return {
+                    "status": "warning",
+                    "type": "team_deadlock",
+                    "solution": self.solutions["team_deadlock"],
+                    "auto_recoverable": True,
+                }
+
+        # Check last few messages for errors
+        for msg in messages[-3:]:
+            if hasattr(msg, "content"):
+                error_type = self._detect_error(msg.content)
+                if error_type:
+                    return {
+                        "status": "error",
+                        "type": error_type,
+                        "solution": self.solutions[error_type],
+                        "auto_recoverable": error_type in ["api_failure"],
+                    }
+
+        return {"status": "ok"}
+
+    def _detect_error(self, message_text: str) -> Optional[str]:
+        """Check message for known error patterns."""
+        if not message_text:
+            return None
+
+        lower_text = message_text.lower()
+        for error_type, patterns in self.error_patterns.items():
+            if any(pattern in lower_text for pattern in patterns):
+                return error_type
+        return None
+
+    def _detect_deadlock(self, messages: List) -> bool:
+        """Check if conversation is stuck in a loop."""
+        if len(messages) < 6:
+            return False
+
+        # Extract relevant information from messages
+        recent_contents = []
+        recent_sources = []
+
+        for msg in messages[-6:]:
+            if hasattr(msg, "content") and hasattr(msg, "source"):
+                recent_contents.append(msg.content)
+                recent_sources.append(msg.source)
+
+        # Check for repeated patterns
+        for i in range(len(recent_contents) - 2):
+            if (
+                recent_sources[i] == recent_sources[i + 2]
+            ):  # Same agent talking every other turn
+                similarity = self._text_similarity(
+                    recent_contents[i], recent_contents[i + 2]
+                )
+                if similarity > 0.7:  # High similarity threshold
+                    return True
+
+        return False
+
+    def _text_similarity(self, text1: str, text2: str) -> float:
+        """Simple text similarity measure."""
+        words1 = set(text1.lower().split())
+        words2 = set(text2.lower().split())
+        if not words1 or not words2:
+            return 0
+        intersection = words1.intersection(words2)
+        return len(intersection) / max(len(words1), len(words2))
+
+    def _attempt_recovery(self, error_type: str):
+        """Attempt to automatically recover from specific errors."""
+        if error_type == "team_deadlock":
+            # Create a new asyncio event loop in this thread
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+            try:
+                # Reset the team
+                loop.run_until_complete(self.palette.create_new_team())
+                print("Team reset successfully after deadlock detection.")
+            except Exception as e:
+                print(f"Error during auto-recovery: {str(e)}")
+            finally:
+                loop.close()
+
+        elif error_type == "api_failure":
+            # Maybe implement retry logic or API key rotation
+            pass
+
+    def get_status_report(self) -> Dict[str, Any]:
+        """Generate a status report of the monitoring."""
+        return {
+            "active": self.monitoring_active,
+            "uptime": time.time() - self.status_history[0]["timestamp"]
+            if self.status_history
+            else 0,
+            "total_checks": len(self.status_history),
+            "recent_issues": [
+                h for h in self.status_history if h["status"]["status"] != "ok"
+            ][-5:],
+            "current_status": self._check_team_health(),
+        }
 
 
 class Palette:
@@ -42,6 +243,8 @@ class Palette:
         behaviour_4="executor",
         token_threshold=10,
         config=None,
+        *args,
+        **kwargs,
     ):
         if config:
             provider_1 = provider_1 or config.get("provider_1")
@@ -113,8 +316,14 @@ class Palette:
         self.max_tokens_3 = max_tokens_3
         self.max_tokens_4 = max_tokens_4
         self.token_threshold = token_threshold
+        self.surveillance = SurveillanceAgent(self)
+        self.text_input = ""
 
         self.agents = []
+
+        auto_monitor = kwargs.get("auto_monitor", True)
+        if auto_monitor:
+            self.surveillance.start_background_monitoring()
 
         self.primary_model = get_model_client(
             provider=self.provider_1,
@@ -212,11 +421,25 @@ class Palette:
             else:
                 break
 
-        return conversation_list
+        return conversation_list, estimated_tokens
 
-    def run_team(self, text_input: str):
-        result = asyncio.run(self.print_convo_and_count_tokens(text_input))
+    def run_team(self, text: str):
+        self.text_input = text
+        if hasattr(self, "surveillance") and self.surveillance.monitoring_active:
+            print("Running with active surveillance...")
+        result = asyncio.run(self.print_convo_and_count_tokens(text))
         return result
+
+    def stop_surveillance(self):
+        """Stop the background surveillance."""
+        if hasattr(self, "surveillance"):
+            self.surveillance.stop_background_monitoring()
+
+    def surveillance_status(self):
+        """Get current surveillance status."""
+        if hasattr(self, "surveillance"):
+            return self.surveillance.get_status_report()
+        return {"active": False, "message": "Surveillance not initialized"}
 
     def display_team_members(self):
         team_members = [self.agent_1, self.agent_2]
@@ -242,3 +465,43 @@ class Palette:
             self.agents, termination_condition=self.text_termination
         )
         print("New team created from existing agents.")
+
+    def count_token_input(self, text):
+        text = self.text_input
+
+        encoding = tiktoken.get_encoding("cl100k_base")
+
+        tokens = encoding.encode(text)
+        token_count = len(tokens)
+
+        return token_count
+
+    def check_token_limit(self, text=None, max_token_limit=1000):
+        input_text = text if text is not None else self.text_input
+
+        token_count = self.count_token_input(input_text)
+
+        if token_count > max_token_limit:
+            suggested_reduction = int(token_count * 0.2)
+
+            warning_message = (
+                f"Warning: Your input exceeds the maximum token limit of {max_token_limit}.\n"
+                f"Current token count: {token_count}\n"
+                f"Please reduce your input by approximately {suggested_reduction} tokens "
+                f"(about {suggested_reduction * 4} characters)."
+            )
+
+            return {
+                "exceeds_limit": True,
+                "token_count": token_count,
+                "max_limit": max_token_limit,
+                "over_by": token_count - max_token_limit,
+                "warning": warning_message,
+            }
+
+        return {
+            "exceeds_limit": False,
+            "token_count": token_count,
+            "max_limit": max_token_limit,
+            "remaining": max_token_limit - token_count,
+        }
