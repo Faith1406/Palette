@@ -37,20 +37,19 @@ class SurveillanceAgent:
             "team_deadlock": "Try modifying agent system prompts or adding termination conditions.",
         }
         self.status_history = []
+        self.log_messages = []  # Store log messages instead of printing them
 
     def start_background_monitoring(self):
         """Start the surveillance agent in the background."""
         if self.monitoring_active:
-            print("Surveillance monitoring is already active.")
+            self._log("Surveillance monitoring is already active.")
             return
 
         self.monitoring_active = True
         self.background_thread = threading.Thread(target=self._background_monitor_loop)
-        self.background_thread.daemon = (
-            True  # Allow the thread to exit when the main program exits
-        )
+        self.background_thread.daemon = True
         self.background_thread.start()
-        print("🔍 Surveillance Agent activated and monitoring in background.")
+        self._log("Surveillance Agent activated and monitoring in background.")
 
     def stop_background_monitoring(self):
         """Stop the background monitoring."""
@@ -59,8 +58,16 @@ class SurveillanceAgent:
 
         self.monitoring_active = False
         if self.background_thread:
-            self.background_thread.join(timeout=2.0)  # Wait for thread to finish
-            print("🛑 Surveillance Agent deactivated.")
+            self.background_thread.join(timeout=2.0)
+            self._log("Surveillance Agent deactivated.")
+
+    def _log(self, message):
+        """Log a message to the internal log instead of printing it."""
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        self.log_messages.append(f"[{timestamp}] {message}")
+        # Limit log size
+        if len(self.log_messages) > 100:
+            self.log_messages = self.log_messages[-100:]
 
     def _background_monitor_loop(self):
         """Main background monitoring loop."""
@@ -70,12 +77,12 @@ class SurveillanceAgent:
                 health_status = self._check_team_health()
 
                 if health_status["status"] != "ok":
-                    print(f"\n⚠️ SURVEILLANCE ALERT: {health_status['type']}")
-                    print(f"SUGGESTED SOLUTION: {health_status['solution']}")
+                    self._log(f"SURVEILLANCE ALERT: {health_status['type']}")
+                    self._log(f"SUGGESTED SOLUTION: {health_status['solution']}")
 
                     # Attempt auto-recovery if enabled
                     if health_status.get("auto_recoverable", False):
-                        print("Attempting auto-recovery...")
+                        self._log("Attempting auto-recovery...")
                         self._attempt_recovery(health_status["type"])
 
                 # Store health status history
@@ -91,7 +98,7 @@ class SurveillanceAgent:
                 time.sleep(5)  # Check every 5 seconds
 
             except Exception as e:
-                print(f"Surveillance monitoring error: {str(e)}")
+                self._log(f"Surveillance monitoring error: {str(e)}")
                 time.sleep(10)  # Back off on errors
 
     def _check_team_health(self) -> Dict[str, Any]:
@@ -164,6 +171,10 @@ class SurveillanceAgent:
 
         return False
 
+    def get_logs(self):
+        """Get the surveillance agent logs."""
+        return self.log_messages
+
     def _text_similarity(self, text1: str, text2: str) -> float:
         """Simple text similarity measure."""
         words1 = set(text1.lower().split())
@@ -183,9 +194,9 @@ class SurveillanceAgent:
             try:
                 # Reset the team
                 loop.run_until_complete(self.palette.create_new_team())
-                print("Team reset successfully after deadlock detection.")
+                self._log("Team reset successfully after deadlock detection.")
             except Exception as e:
-                print(f"Error during auto-recovery: {str(e)}")
+                self._log(f"Error during auto-recovery: {str(e)}")
             finally:
                 loop.close()
 
@@ -425,8 +436,6 @@ class Palette:
 
     def run_team(self, text: str):
         self.text_input = text
-        if hasattr(self, "surveillance") and self.surveillance.monitoring_active:
-            print("Running with active surveillance...")
         result = asyncio.run(self.print_convo_and_count_tokens(text))
         return result
 
@@ -505,3 +514,9 @@ class Palette:
             "max_limit": max_token_limit,
             "remaining": max_token_limit - token_count,
         }
+
+    def get_surveillance_logs(self):
+        """Get logs from the surveillance agent."""
+        if hasattr(self, "surveillance"):
+            return self.surveillance.log_messages
+        return []
